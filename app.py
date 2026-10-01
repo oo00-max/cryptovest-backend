@@ -22,7 +22,8 @@ CORS(app, origins=ALLOWED_ORIGINS)
 
 DISCORD_WEBHOOK = os.getenv('DISCORD_WEBHOOK')
 SUPABASE_URL = os.getenv('SUPABASE_URL')
-SUPABASE_SERVICE_KEY = os.getenv('SUPABASE_SERVICE_KEY')   # server-only, bypasses RLS
+SUPABASE_SERVICE_KEY = os.getenv('SUPABASE_SERVICE_KEY')   # bypasses RLS — server only
+SUPABASE_ANON_KEY = os.getenv('SUPABASE_ANON_KEY')         # for token verification
 ADMIN_EMAIL = os.getenv('ADMIN_EMAIL')
 
 
@@ -30,6 +31,7 @@ ADMIN_EMAIL = os.getenv('ADMIN_EMAIL')
 # HELPERS
 # ============================================================
 def sb_headers():
+    """Service-key headers — used for database ops that bypass RLS."""
     return {
         'apikey': SUPABASE_SERVICE_KEY,
         'Authorization': f'Bearer {SUPABASE_SERVICE_KEY}',
@@ -38,17 +40,20 @@ def sb_headers():
 
 
 def verify_token(token):
-    """Ask supabase who this access token belongs to. Returns dict or None."""
+    """Ask supabase who this access token belongs to. Returns dict or None.
+    Uses the ANON key as `apikey` — that's the documented pattern for /auth/v1/user.
+    """
     try:
         r = requests.get(
             f'{SUPABASE_URL}/auth/v1/user',
             headers={
-                'apikey': SUPABASE_SERVICE_KEY,
+                'apikey': SUPABASE_ANON_KEY,
                 'Authorization': f'Bearer {token}',
             },
             timeout=10,
         )
         if r.status_code != 200:
+            print(f'verify_token failed: {r.status_code} {r.text[:200]}')
             return None
         return r.json()
     except Exception as e:
@@ -233,10 +238,12 @@ if __name__ == '__main__':
     print('=' * 60)
     print('🚀 CryptoVest Backend')
     print('=' * 60)
-    print(f'   Port:       {port}')
-    print(f'   Supabase:   {SUPABASE_URL}')
-    print(f'   Admin:      {ADMIN_EMAIL}')
-    print(f'   Discord:    {"configured" if DISCORD_WEBHOOK else "MISSING"}')
-    print(f'   Origins:    {ALLOWED_ORIGINS}')
+    print(f'   Port:            {port}')
+    print(f'   Supabase:        {SUPABASE_URL}')
+    print(f'   Admin:           {ADMIN_EMAIL}')
+    print(f'   Discord:         {"configured" if DISCORD_WEBHOOK else "MISSING"}')
+    print(f'   Service key:     {"set" if SUPABASE_SERVICE_KEY else "MISSING"}')
+    print(f'   Anon key:        {"set" if SUPABASE_ANON_KEY else "MISSING"}')
+    print(f'   Origins:         {ALLOWED_ORIGINS}')
     print('=' * 60)
     app.run(host='0.0.0.0', port=port, debug=False)
